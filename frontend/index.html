@@ -184,7 +184,25 @@ function restoreLog() { // 重新整理/切換網路後，把保存的紀錄補�
 }
 function clearLog() { // 手動清空（需要時才按）
   sessionStorage.removeItem(LOG_KEY);
+  sessionStorage.removeItem("mall_vlinks"); // 下次連接會重印合約驗證連結
   $("log").innerHTML = '<div class="logline muted">尚無交易。</div>';
+}
+// 一個合約的「原始碼✓ + 讀狀態」兩個 Etherscan 連結
+function etherLinks(addr) {
+  return `<a href="${EXPLORER}/address/${addr}#code" target="_blank">原始碼✓</a> · `
+       + `<a href="${EXPLORER}/address/${addr}#readContract" target="_blank">讀狀態</a>`;
+}
+// 連接後一次把 5 個合約的驗證連結印進紀錄（同一分頁只印一次，避免重複洗版）
+function logVerifyLinksOnce() {
+  if (sessionStorage.getItem("mall_vlinks")) return;
+  const C = CFG.contracts;
+  log(`📋 <b>合約驗證連結</b>（點即查，demo 免切畫面）<br>`
+    + `&nbsp;&nbsp;• PriceConsumer 預言機：${etherLinks(C.PriceConsumer)}<br>`
+    + `&nbsp;&nbsp;• Auction 拍賣：${etherLinks(C.Auction)}<br>`
+    + `&nbsp;&nbsp;• MallToken 代幣：${etherLinks(C.MallToken)}<br>`
+    + `&nbsp;&nbsp;• MallItem NFT：${etherLinks(C.MallItem)}<br>`
+    + `&nbsp;&nbsp;• Marketplace：${etherLinks(C.Marketplace)}`);
+  sessionStorage.setItem("mall_vlinks", "1");
 }
 function ipfsToHttp(uri) {
   if (!uri) return "";
@@ -243,9 +261,9 @@ async function connect() {
     `<a href="${EXPLORER}/address/${CFG.contracts.MallItem}" target="_blank">NFT</a> · ` +
     `<a href="${EXPLORER}/address/${CFG.contracts.Auction}" target="_blank">拍賣合約</a>`;
 
-  // 連接成功就把錢包與合約檢視連結寫進交易紀錄（永久保留在本次紀錄中）
+  // 連接成功：印錢包，並一次把 5 個合約的驗證連結寫進交易紀錄（demo 驗證免切畫面）
   log(`👛 已連接錢包 ${short(account)}`);
-  log(`🔗 合約公開可檢視（Read Contract）：<a href="${EXPLORER}/address/${CFG.contracts.PriceConsumer}#readContract" target="_blank">PriceConsumer ↗</a>`);
+  logVerifyLinksOnce();
 
   await refresh();
   await loadPrice();
@@ -279,7 +297,7 @@ async function loadPrice() {
     $("pricePill").textContent =
       "⛓️ ETH/USD: $" + ethUsd.toLocaleString(undefined, { maximumFractionDigits: 2 });
     $("pricePill").className = "pill green";
-    log(`⛓️ Chainlink 讀取 ETH/USD = $${ethUsd.toFixed(2)}（鏈上 Data Feed）`);
+    log(`⛓️ Chainlink 讀取 ETH/USD = $${ethUsd.toFixed(2)}　🔎 <a href="${EXPLORER}/address/${CFG.contracts.PriceConsumer}#readContract" target="_blank">在 Etherscan 讀同一個值 ↗</a>`);
   } catch (e) {
     $("pricePill").textContent = "⛓️ ETH/USD:（本地無報價）";
   }
@@ -321,7 +339,7 @@ async function createAuction() {
     for (const lg of rc1.logs) {
       try { const p = item.interface.parseLog(lg); if (p && p.name === "ItemMinted") { tokenId = p.args.tokenId; break; } } catch (_) {}
     }
-    log("✅ NFT 鑄造完成，tokenId = " + tokenId);
+    log(`✅ NFT 鑄造完成，tokenId = ${tokenId}　🖼️ <a href="${EXPLORER}/nft/${CFG.contracts.MallItem}/${tokenId}" target="_blank">看這顆 NFT 的鏈上一生 ↗</a>`);
 
     // 2) 授權拍賣合約可託管此 NFT
     const tx2 = await item.approve(CFG.contracts.Auction, tokenId);
@@ -332,7 +350,7 @@ async function createAuction() {
     const tx3 = await auction.createAuction(CFG.contracts.MallItem, tokenId, startPrice, durSec);
     log(`🔨 建立拍賣（起標 ${startStr} MTK，時長 ${(durSec / 60).toFixed(1)} 分）…`, tx3.hash);
     await tx3.wait();
-    log("✅ 拍賣已建立！");
+    log(`✅ 拍賣已建立！　🔎 <a href="${EXPLORER}/address/${CFG.contracts.Auction}#readContract" target="_blank">讀 getActiveAuctions 看鏈上拍賣狀態 ↗</a>`);
 
     $("sellUri").value = ""; $("sellPrice").value = "";
     await loadAuctions();
@@ -399,7 +417,7 @@ async function loadAuctions() {
               : `<input type="number" placeholder="≥ ${minNext}" data-bidinput />
                  <button class="ok" data-bid="${a.id}" style="margin-top:6px;">出價</button>`}
           </div>
-          <button class="ghost settlebtn" data-settle="${a.id}" style="display:none;margin-top:8px;">結算（價高者得）</button>
+          <button class="ghost settlebtn" data-settle="${a.id}" data-tokenid="${a.tokenId}" style="display:none;margin-top:8px;">結算（價高者得）</button>
         </div>`;
       box.appendChild(card);
       loadImage(card.querySelector("img"), a.nft, a.tokenId);
@@ -410,7 +428,7 @@ async function loadAuctions() {
         placeBid(b.dataset.bid, input ? input.value : "");
       }));
     box.querySelectorAll("[data-settle]").forEach((b) =>
-      b.addEventListener("click", () => settle(b.dataset.settle)));
+      b.addEventListener("click", () => settle(b.dataset.settle, b.dataset.tokenid)));
 
     tick();
     if (!tickStarted) { tickStarted = true; setInterval(tick, 1000); }
@@ -449,7 +467,7 @@ async function placeBid(auctionId, amountStr) {
     const tx2 = await auction.bid(auctionId, amount);
     log(`🙋 出價 ${amountStr} MTK…`, tx2.hash);
     await tx2.wait();
-    log("✅ 出價成功！若超越他人，對方的 MTK 會自動退回");
+    log("✅ 出價成功！點上面那筆「在 Etherscan 查看交易」→ 往下找 Tokens Transferred，可看到超越他人時對方的 MTK 在同一筆交易內自動退回（鐵證）");
     await refresh();
     await loadAuctions();
   } catch (e) {
@@ -458,12 +476,15 @@ async function placeBid(auctionId, amountStr) {
 }
 
 // ====== 結算拍賣（時間到，任何人可呼叫）======
-async function settle(auctionId) {
+async function settle(auctionId, tokenId) {
   try {
     const tx = await auction.endAuction(auctionId);
     log("⏰ 結算拍賣…", tx.hash);
     await tx.wait();
-    log("✅ 結算完成！NFT 給最高出價者、MTK 給賣家");
+    const nftLink = tokenId != null
+      ? `　🖼️ <a href="${EXPLORER}/nft/${CFG.contracts.MallItem}/${tokenId}" target="_blank">看 NFT 最終擁有者 ↗</a>`
+      : "";
+    log(`✅ 結算完成！NFT 給最高出價者、MTK 給賣家${nftLink}`);
     await refresh();
     await loadAuctions();
   } catch (e) {
