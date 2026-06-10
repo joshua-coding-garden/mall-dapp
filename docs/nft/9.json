@@ -1,0 +1,19 @@
+{
+  "name": "Mall Genesis #9 · Chain",
+  "description": "原創生成藝術，為 Web3 混合型商城競價拍賣 demo 鑄造（程式生成、無著作權疑慮）。Generative art for the mall-dapp auction demo.",
+  "image": "https://joshua-coding-garden.github.io/mall-dapp/nft/img/9.png",
+  "attributes": [
+    {
+      "trait_type": "Style",
+      "value": "Chain"
+    },
+    {
+      "trait_type": "Palette",
+      "value": "Mint"
+    },
+    {
+      "trait_type": "Edition",
+      "value": "9/12"
+    }
+  ]
+}
