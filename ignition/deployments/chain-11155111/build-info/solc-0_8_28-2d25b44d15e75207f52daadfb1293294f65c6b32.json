@@ -1,0 +1,54 @@
+{
+  "_format": "hh3-sol-build-info-1",
+  "id": "solc-0_8_28-2d25b44d15e75207f52daadfb1293294f65c6b32",
+  "solcVersion": "0.8.28",
+  "solcLongVersion": "0.8.28+commit.7893614a",
+  "compilerType": "solc",
+  "toolVersions": {
+    "hardhat": "3.7.0"
+  },
+  "userSourceNameMap": {
+    "contracts/PriceConsumer.sol": "project/contracts/PriceConsumer.sol"
+  },
+  "input": {
+    "language": "Solidity",
+    "settings": {
+      "evmVersion": "cancun",
+      "optimizer": {
+        "enabled": true,
+        "runs": 200
+      },
+      "outputSelection": {
+        "*": {
+          "": [
+            "ast"
+          ],
+          "*": [
+            "abi",
+            "evm.bytecode.linkReferences",
+            "evm.bytecode.object",
+            "evm.bytecode.opcodes",
+            "evm.bytecode.sourceMap",
+            "evm.deployedBytecode.immutableReferences",
+            "evm.deployedBytecode.linkReferences",
+            "evm.deployedBytecode.object",
+            "evm.deployedBytecode.opcodes",
+            "evm.deployedBytecode.sourceMap",
+            "evm.methodIdentifiers"
+          ]
+        }
+      },
+      "remappings": [
+        "project/:@chainlink/contracts/=npm/@chainlink/contracts@1.5.0/"
+      ]
+    },
+    "sources": {
+      "npm/@chainlink/contracts@1.5.0/src/v0.8/shared/interfaces/AggregatorV3Interface.sol": {
+        "content": "// SPDX-License-Identifier: MIT\npragma solidity ^0.8.0;\n\n// solhint-disable-next-line interface-starts-with-i\ninterface AggregatorV3Interface {\n  function decimals() external view returns (uint8);\n\n  function description() external view returns (string memory);\n\n  function version() external view returns (uint256);\n\n  function getRoundData(\n    uint80 _roundId\n  ) external view returns (uint80 roundId, int256 answer, uint256 startedAt, uint256 updatedAt, uint80 answeredInRound);\n\n  function latestRoundData()\n    external\n    view\n    returns (uint80 roundId, int256 answer, uint256 startedAt, uint256 updatedAt, uint80 answeredInRound);\n}\n"
+      },
+      "project/contracts/PriceConsumer.sol": {
+        "content": "// SPDX-License-Identifier: MIT\npragma solidity ^0.8.20;\n\nimport {AggregatorV3Interface} from \"@chainlink/contracts/src/v0.8/shared/interfaces/AggregatorV3Interface.sol\";\n\n/**\n * @title PriceConsumer\n * @notice Chainlink Data Feeds 消費端：讀取鏈上 ETH/USD 即時聚合價格。\n *         對應作業：HW5(Chainlink Oracles - Data Feeds)\n *\n *  區塊鏈合約無法主動取得鏈外資料（Oracle 問題）。Chainlink 透過去中心化\n *  預言機網路把聚合後的價格寫入鏈上 Aggregator，合約只需呼叫標準介面讀取。\n *  本商城用它把 MTK 售價換算成參考美金價，展示與真實世界資料的互動。\n *\n *  Sepolia ETH/USD Aggregator: 0x694AA1769357215DE4FAC081bf1f309aDC325306\n */\ncontract PriceConsumer {\n    AggregatorV3Interface public immutable priceFeed;\n\n    /// @param feed Chainlink Aggregator 合約地址（Sepolia ETH/USD）\n    constructor(address feed) {\n        priceFeed = AggregatorV3Interface(feed);\n    }\n\n    /// @notice 回傳最新一輪的 ETH/USD 原始價格（需除以 10**decimals 得實際美金）。\n    function getLatestPrice() external view returns (int256) {\n        (, int256 price, , , ) = priceFeed.latestRoundData();\n        return price;\n    }\n\n    /// @notice Aggregator 的小數位數（Sepolia ETH/USD 為 8）。\n    function getDecimals() external view returns (uint8) {\n        return priceFeed.decimals();\n    }\n}\n"
+      }
+    }
+  }
+}

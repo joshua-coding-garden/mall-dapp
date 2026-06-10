@@ -1,0 +1,9 @@
+{
+  "name": "示範商品 #1",
+  "description": "這是上架到 Web3 商城的數位商品，metadata 與圖片都存在 IPFS。",
+  "image": "ipfs://把圖片上傳到Pinata後得到的CID",
+  "attributes": [
+    { "trait_type": "分類", "value": "數位藝術" },
+    { "trait_type": "稀有度", "value": "限量" }
+  ]
+}

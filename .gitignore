@@ -1,0 +1,21 @@
+node_modules
+.env
+coverage
+coverage.json
+typechain
+typechain-types
+
+# Hardhat
+cache
+artifacts
+
+# 部署結果（可保留，但私鑰相關不要）
+deployments/*.local.json
+
+# 報告/demo 用的暫存與大檔（不需進 repo）
+_video
+_frames
+_demo_shots
+_pdf_render
+_pdf_text.txt
+pdf_dump.py

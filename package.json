@@ -1,0 +1,31 @@
+{
+  "name": "mall-dapp",
+  "version": "1.0.0",
+  "type": "module",
+  "description": "Web3 混合型商城 - 期末專題 (ERC-20 + ERC-721 + Marketplace, Hardhat 3 + Ignition + TS)",
+  "scripts": {
+    "compile": "hardhat compile",
+    "test": "hardhat test",
+    "deploy:local": "hardhat ignition deploy ignition/modules/Mall.ts",
+    "deploy:sepolia": "hardhat ignition deploy ignition/modules/Mall.ts --network sepolia",
+    "export": "node scripts/export-frontend.mjs",
+    "verify:sepolia": "hardhat ignition verify chain-11155111 --network sepolia"
+  },
+  "devDependencies": {
+    "@nomicfoundation/hardhat-toolbox-mocha-ethers": "^3.0.6",
+    "@types/chai": "^5.0.1",
+    "@types/mocha": "^10.0.10",
+    "@types/node": "^22.10.5",
+    "chai": "^5.1.2",
+    "ethers": "^6.14.0",
+    "hardhat": "^3.7.0",
+    "mocha": "^11.0.2",
+    "playwright": "^1.60.0",
+    "typescript": "~5.7.3"
+  },
+  "dependencies": {
+    "@chainlink/contracts": "^1.5.0",
+    "@openzeppelin/contracts": "^5.1.0",
+    "dotenv": "^16.4.7"
+  }
+}
