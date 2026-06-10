@@ -104,6 +104,16 @@
       <div id="items" class="items"><p class="muted">連接錢包後載入拍賣…</p></div>
     </div>
 
+    <!-- 我的 NFT（連接的帳號目前持有的商品 NFT）-->
+    <div class="card" style="margin-top:18px;">
+      <h2>🖼️ 我的 NFT　<button id="loadNftBtn" class="ghost" disabled>重新載入</button></h2>
+      <div id="myNfts" class="items"><p class="muted">連接錢包後載入你持有的 NFT…</p></div>
+      <p class="muted" id="nftImportHint" style="margin-top:10px; display:none;">
+        手動匯入 MetaMask：打開小狐狸 →「NFTs」分頁 →「Import NFT」→
+        貼上合約地址 <code id="nftAddr"></code>（可按卡片上的「複製合約地址」）、Token ID 填卡片上的編號。
+      </p>
+    </div>
+
     <!-- 合約一覽：永久顯示，原始碼皆已驗證 -->
     <div class="card" style="margin-top:18px; border-color:#1f5e48;">
       <h2>🔍 合約一覽（5 份原始碼皆已於 Etherscan 完成驗證 ✓）</h2>
@@ -132,6 +142,8 @@ const ITEM_ABI = [
   "function approve(address to, uint256 tokenId)",
   "function ownerOf(uint256) view returns (address)",
   "function tokenURI(uint256) view returns (string)",
+  "function balanceOf(address) view returns (uint256)",
+  "function tokenOfOwnerByIndex(address,uint256) view returns (uint256)",
   "event ItemMinted(address indexed owner, uint256 indexed tokenId, string tokenURI)",
 ];
 const MARKET_ABI = [
@@ -269,7 +281,7 @@ async function connect() {
     auction = new ethers.Contract(CFG.contracts.Auction, AUCTION_ABI, signer);
   }
 
-  ["claimBtn", "refreshBtn", "listBtn", "loadItemsBtn"].forEach((id) => ($(id).disabled = false));
+  ["claimBtn", "refreshBtn", "listBtn", "loadItemsBtn", "loadNftBtn"].forEach((id) => ($(id).disabled = false));
   $("contractLinks").innerHTML =
     `合約：<a href="${EXPLORER}/address/${CFG.contracts.MallToken}" target="_blank">MTK代幣</a> · ` +
     `<a href="${EXPLORER}/address/${CFG.contracts.MallItem}" target="_blank">NFT</a> · ` +
@@ -280,6 +292,7 @@ async function connect() {
   await refresh();
   await loadPrice();
   await loadAuctions();
+  await loadMyNfts();
 
   // 帳號 / 網路改變時重整
   window.ethereum.on("accountsChanged", () => location.reload());
@@ -466,6 +479,61 @@ async function loadImage(imgEl, nftAddr, tokenId) {
   }
 }
 
+// ====== 我的 NFT：列出連接帳號持有的商品 NFT（ERC721Enumerable）======
+async function loadMyNfts() {
+  if (!item || !account) return;
+  const box = $("myNfts");
+  box.innerHTML = '<p class="muted">載入中…</p>';
+  try {
+    const bal = Number(await item.balanceOf(account));
+    if (bal === 0) {
+      box.innerHTML = '<p class="muted">此帳號目前未持有商品 NFT（得標後會顯示於此）。</p>';
+      $("nftImportHint").style.display = "none";
+      return;
+    }
+    const ids = [];
+    for (let i = 0; i < bal; i++) ids.push(Number(await item.tokenOfOwnerByIndex(account, i)));
+    box.innerHTML = "";
+    for (const id of ids) {
+      const card = document.createElement("div");
+      card.className = "item";
+      card.innerHTML = `
+        <img alt="nft" src="" />
+        <div class="body">
+          <div class="name">#${id}</div>
+          <div class="muted" style="font-size:12px;">合約 ${short(CFG.contracts.MallItem)} · Token ID ${id}</div>
+          <button class="ok" data-add="${id}" style="margin-top:8px;width:100%;">加入 MetaMask</button>
+          <button class="ghost" data-copy="1" style="margin-top:6px;width:100%;font-size:12px;">複製合約地址</button>
+        </div>`;
+      box.appendChild(card);
+      loadImage(card.querySelector("img"), CFG.contracts.MallItem, id);
+    }
+    box.querySelectorAll("[data-add]").forEach((b) =>
+      b.addEventListener("click", () => watchNft(b.dataset.add)));
+    box.querySelectorAll("[data-copy]").forEach((b) =>
+      b.addEventListener("click", async () => {
+        try { await navigator.clipboard.writeText(CFG.contracts.MallItem); b.textContent = "已複製 ✓"; setTimeout(() => (b.textContent = "複製合約地址"), 1500); } catch (_) {}
+      }));
+    $("nftAddr").textContent = CFG.contracts.MallItem;
+    $("nftImportHint").style.display = "";
+  } catch (e) {
+    box.innerHTML = '<p class="muted">載入失敗：' + cleanErr(e) + "</p>";
+  }
+}
+
+// 用 MetaMask 的 wallet_watchAsset 一鍵加入 NFT（使用者仍需在錢包確認）
+async function watchNft(tokenId) {
+  try {
+    await window.ethereum.request({
+      method: "wallet_watchAsset",
+      params: { type: "ERC721", options: { address: CFG.contracts.MallItem, tokenId: String(tokenId) } },
+    });
+    log(`🖼️ 已請求將 NFT #${tokenId} 加入 MetaMask，請於錢包點確認`);
+  } catch (e) {
+    log("ℹ️ 一鍵加入未成功，請改用下方「手動匯入」步驟：" + cleanErr(e));
+  }
+}
+
 // ====== 出價：approve MTK → bid ======
 async function placeBid(auctionId, amountStr, btn) {
   if (!amountStr || Number(amountStr) <= 0) { alert("請輸入出價金額"); return; }
@@ -502,6 +570,7 @@ async function settle(auctionId, tokenId, btn) {
     log(`✅ 結算完成：NFT 轉予最高出價者、得標金 MTK 轉予賣家${nftLink}`);
     await refresh();
     await loadAuctions();
+    await loadMyNfts();
   } catch (e) {
     if (btn) btn.disabled = false;
     log("❌ 結算失敗：" + cleanErr(e));
@@ -514,6 +583,7 @@ $("claimBtn").addEventListener("click", claim);
 $("refreshBtn").addEventListener("click", refresh);
 $("listBtn").addEventListener("click", createAuction);
 $("loadItemsBtn").addEventListener("click", loadAuctions);
+$("loadNftBtn").addEventListener("click", loadMyNfts);
 $("clearLogBtn").addEventListener("click", clearLog);
 
 renderVerifyPanel(); // 一載入即顯示「合約一覽」面板，不依賴交易紀錄
