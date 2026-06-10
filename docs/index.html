@@ -104,6 +104,13 @@
       <div id="items" class="items"><p class="muted">連接錢包後載入拍賣…</p></div>
     </div>
 
+    <!-- 合約一覽：永久顯示，原始碼皆已驗證 -->
+    <div class="card" style="margin-top:18px; border-color:#1f5e48;">
+      <h2>🔍 合約一覽（5 份原始碼皆已於 Etherscan 完成驗證 ✓）</h2>
+      <div id="verifyPanel" class="muted" style="font-size:13px;">載入中…</div>
+      <p class="muted" style="margin-top:8px;">點「原始碼」檢視已驗證的 Solidity；點「查詢狀態」讀取合約當前的鏈上資料。</p>
+    </div>
+
     <!-- 交易紀錄（每筆都附 Etherscan 連結 = 外部可查詢）-->
     <div class="card" style="margin-top:18px;">
       <h2>🔗 交易紀錄（點連結到 Etherscan 查證）　<button id="clearLogBtn" class="ghost" style="font-size:12px;padding:2px 10px;">清除</button></h2>
@@ -152,6 +159,7 @@ let tickStarted = false;
 
 // ====== 小工具 ======
 const $ = (id) => document.getElementById(id);
+
 // ====== 交易紀錄：存進 sessionStorage，重新整理／切換網路都不會被吃掉，關閉分頁才清空 ======
 const LOG_KEY = "mall_txlog";
 function loadLogStore() {
@@ -176,7 +184,7 @@ function log(msg, txHash) {
   try { sessionStorage.setItem(LOG_KEY, JSON.stringify(arr)); } catch (_) {}
   renderLogLine(html);
 }
-function restoreLog() { // 重新整理/切換網路後，把保存的紀錄補回畫面
+function restoreLog() { // 重新整理／切換網路後，把保存的紀錄補回畫面
   const arr = loadLogStore();
   if (!arr.length) return;
   $("log").innerHTML = "";
@@ -184,32 +192,38 @@ function restoreLog() { // 重新整理/切換網路後，把保存的紀錄補�
 }
 function clearLog() { // 手動清空（需要時才按）
   sessionStorage.removeItem(LOG_KEY);
-  sessionStorage.removeItem("mall_vlinks"); // 下次連接會重印合約驗證連結
   $("log").innerHTML = '<div class="logline muted">尚無交易。</div>';
 }
-// 一個合約的「原始碼✓ + 讀狀態」兩個 Etherscan 連結
-function etherLinks(addr) {
-  return `<a href="${EXPLORER}/address/${addr}#code" target="_blank">原始碼✓</a> · `
-       + `<a href="${EXPLORER}/address/${addr}#readContract" target="_blank">讀狀態</a>`;
+
+// ====== 合約一覽面板：一載入即顯示，原始碼/狀態連結固定可點，不依賴交易紀錄 ======
+function renderVerifyPanel() {
+  const C = (CFG && CFG.contracts) || {};
+  const rows = [
+    ["Auction 競價拍賣（整合 ERC-20／ERC-721，HW2）", C.Auction, "getActiveAuctions"],
+    ["MallToken（ERC-20 平台代幣，HW3）", C.MallToken, ""],
+    ["MallItem（ERC-721 商品 NFT，HW4）", C.MallItem, ""],
+    ["PriceConsumer（Chainlink 價格預言機，HW5）", C.PriceConsumer, "getLatestPrice"],
+    ["Marketplace（固定價商城）", C.Marketplace, ""],
+  ].filter((r) => r[1]);
+  $("verifyPanel").innerHTML = rows.map(([label, addr, fn], i) =>
+    `<div style="padding:8px 0;border-bottom:1px solid var(--line);">
+      <div style="margin-bottom:4px;color:var(--txt);">${i + 1}. ${label}</div>
+      <a href="${EXPLORER}/address/${addr}#code" target="_blank">原始碼 ✓</a>
+      &nbsp;｜&nbsp;
+      <a href="${EXPLORER}/address/${addr}#readContract" target="_blank">查詢狀態${fn ? "（" + fn + "）" : ""}</a>
+    </div>`).join("");
 }
-// 連接後一次把 5 個合約的驗證連結印進紀錄（同一分頁只印一次，避免重複洗版）
-function logVerifyLinksOnce() {
-  if (sessionStorage.getItem("mall_vlinks")) return;
-  const C = CFG.contracts;
-  log(`📋 <b>合約驗證連結</b>（點即查，demo 免切畫面）<br>`
-    + `&nbsp;&nbsp;• PriceConsumer 預言機：${etherLinks(C.PriceConsumer)}<br>`
-    + `&nbsp;&nbsp;• Auction 拍賣：${etherLinks(C.Auction)}<br>`
-    + `&nbsp;&nbsp;• MallToken 代幣：${etherLinks(C.MallToken)}<br>`
-    + `&nbsp;&nbsp;• MallItem NFT：${etherLinks(C.MallItem)}<br>`
-    + `&nbsp;&nbsp;• Marketplace：${etherLinks(C.Marketplace)}`);
-  sessionStorage.setItem("mall_vlinks", "1");
-}
+
 function ipfsToHttp(uri) {
   if (!uri) return "";
   if (uri.startsWith("ipfs://")) return "https://ipfs.io/ipfs/" + uri.slice(7);
   return uri;
 }
 function short(a) { return a ? a.slice(0, 6) + "…" + a.slice(-4) : ""; }
+// 把冗長的鏈上錯誤縮成一句話（避免把整包交易 JSON 印進紀錄）
+function cleanErr(e) {
+  return (e && (e.shortMessage || e.reason || e.info?.error?.message)) || "交易失敗（詳見 Etherscan）";
+}
 
 function configured() {
   return CFG && CFG.contracts && CFG.contracts.MallToken && CFG.contracts.Auction;
@@ -261,9 +275,7 @@ async function connect() {
     `<a href="${EXPLORER}/address/${CFG.contracts.MallItem}" target="_blank">NFT</a> · ` +
     `<a href="${EXPLORER}/address/${CFG.contracts.Auction}" target="_blank">拍賣合約</a>`;
 
-  // 連接成功：印錢包，並一次把 5 個合約的驗證連結寫進交易紀錄（demo 驗證免切畫面）
   log(`👛 已連接錢包 ${short(account)}`);
-  logVerifyLinksOnce();
 
   await refresh();
   await loadPrice();
@@ -297,7 +309,7 @@ async function loadPrice() {
     $("pricePill").textContent =
       "⛓️ ETH/USD: $" + ethUsd.toLocaleString(undefined, { maximumFractionDigits: 2 });
     $("pricePill").className = "pill green";
-    log(`⛓️ Chainlink 讀取 ETH/USD = $${ethUsd.toFixed(2)}　🔎 <a href="${EXPLORER}/address/${CFG.contracts.PriceConsumer}#readContract" target="_blank">在 Etherscan 讀同一個值 ↗</a>`);
+    log(`⛓️ Chainlink 預言機 ETH/USD：$${ethUsd.toFixed(2)}　<a href="${EXPLORER}/address/${CFG.contracts.PriceConsumer}#readContract" target="_blank">在 Etherscan 查詢 getLatestPrice ↗</a>`);
   } catch (e) {
     $("pricePill").textContent = "⛓️ ETH/USD:（本地無報價）";
   }
@@ -313,7 +325,7 @@ async function claim() {
     log("✅ 領取成功");
     await refresh();
   } catch (e) {
-    log("❌ 領取失敗：" + (e.reason || e.message));
+    log("❌ 領取失敗：" + cleanErr(e));
   } finally {
     $("claimBtn").disabled = false;
   }
@@ -339,7 +351,7 @@ async function createAuction() {
     for (const lg of rc1.logs) {
       try { const p = item.interface.parseLog(lg); if (p && p.name === "ItemMinted") { tokenId = p.args.tokenId; break; } } catch (_) {}
     }
-    log(`✅ NFT 鑄造完成，tokenId = ${tokenId}　🖼️ <a href="${EXPLORER}/nft/${CFG.contracts.MallItem}/${tokenId}" target="_blank">看這顆 NFT 的鏈上一生 ↗</a>`);
+    log(`✅ NFT 已鑄造，tokenId = ${tokenId}　<a href="${EXPLORER}/nft/${CFG.contracts.MallItem}/${tokenId}" target="_blank">在 Etherscan 查看此 NFT ↗</a>`);
 
     // 2) 授權拍賣合約可託管此 NFT
     const tx2 = await item.approve(CFG.contracts.Auction, tokenId);
@@ -350,12 +362,12 @@ async function createAuction() {
     const tx3 = await auction.createAuction(CFG.contracts.MallItem, tokenId, startPrice, durSec);
     log(`🔨 建立拍賣（起標 ${startStr} MTK，時長 ${(durSec / 60).toFixed(1)} 分）…`, tx3.hash);
     await tx3.wait();
-    log(`✅ 拍賣已建立！　🔎 <a href="${EXPLORER}/address/${CFG.contracts.Auction}#readContract" target="_blank">讀 getActiveAuctions 看鏈上拍賣狀態 ↗</a>`);
+    log(`✅ 拍賣已建立　<a href="${EXPLORER}/address/${CFG.contracts.Auction}#readContract" target="_blank">在 Etherscan 查詢 getActiveAuctions ↗</a>`);
 
     $("sellUri").value = ""; $("sellPrice").value = "";
     await loadAuctions();
   } catch (e) {
-    log("❌ 建立拍賣失敗：" + (e.reason || e.message));
+    log("❌ 建立拍賣失敗：" + cleanErr(e));
   } finally {
     $("listBtn").disabled = false;
   }
@@ -425,10 +437,10 @@ async function loadAuctions() {
     box.querySelectorAll("[data-bid]").forEach((b) =>
       b.addEventListener("click", () => {
         const input = b.parentElement.querySelector("[data-bidinput]");
-        placeBid(b.dataset.bid, input ? input.value : "");
+        placeBid(b.dataset.bid, input ? input.value : "", b);
       }));
     box.querySelectorAll("[data-settle]").forEach((b) =>
-      b.addEventListener("click", () => settle(b.dataset.settle, b.dataset.tokenid)));
+      b.addEventListener("click", () => settle(b.dataset.settle, b.dataset.tokenid, b)));
 
     tick();
     if (!tickStarted) { tickStarted = true; setInterval(tick, 1000); }
@@ -455,8 +467,9 @@ async function loadImage(imgEl, nftAddr, tokenId) {
 }
 
 // ====== 出價：approve MTK → bid ======
-async function placeBid(auctionId, amountStr) {
+async function placeBid(auctionId, amountStr, btn) {
   if (!amountStr || Number(amountStr) <= 0) { alert("請輸入出價金額"); return; }
+  if (btn) btn.disabled = true; // 送出後立即禁用，避免重複點擊送出多筆出價
   const amount = ethers.parseEther(String(amountStr));
   try {
     // 1) 授權拍賣合約可動用足額 MTK
@@ -467,28 +480,31 @@ async function placeBid(auctionId, amountStr) {
     const tx2 = await auction.bid(auctionId, amount);
     log(`🙋 出價 ${amountStr} MTK…`, tx2.hash);
     await tx2.wait();
-    log("✅ 出價成功！點上面那筆「在 Etherscan 查看交易」→ 往下找 Tokens Transferred，可看到超越他人時對方的 MTK 在同一筆交易內自動退回（鐵證）");
+    log("✅ 出價成功。於該筆交易的 Tokens Transferred 可見：超越前一最高出價時，前一出價者的 MTK 已於同一筆交易內退還");
     await refresh();
     await loadAuctions();
   } catch (e) {
-    log("❌ 出價失敗：" + (e.reason || e.message));
+    if (btn) btn.disabled = false;
+    log("❌ 出價失敗：" + cleanErr(e));
   }
 }
 
 // ====== 結算拍賣（時間到，任何人可呼叫）======
-async function settle(auctionId, tokenId) {
+async function settle(auctionId, tokenId, btn) {
+  if (btn) btn.disabled = true; // 送出後立即禁用，避免重複點擊送出多筆結算
   try {
     const tx = await auction.endAuction(auctionId);
     log("⏰ 結算拍賣…", tx.hash);
     await tx.wait();
     const nftLink = tokenId != null
-      ? `　🖼️ <a href="${EXPLORER}/nft/${CFG.contracts.MallItem}/${tokenId}" target="_blank">看 NFT 最終擁有者 ↗</a>`
+      ? `　<a href="${EXPLORER}/nft/${CFG.contracts.MallItem}/${tokenId}" target="_blank">在 Etherscan 查看此 NFT ↗</a>`
       : "";
-    log(`✅ 結算完成！NFT 給最高出價者、MTK 給賣家${nftLink}`);
+    log(`✅ 結算完成：NFT 轉予最高出價者、得標金 MTK 轉予賣家${nftLink}`);
     await refresh();
     await loadAuctions();
   } catch (e) {
-    log("❌ 結算失敗：" + (e.reason || e.message));
+    if (btn) btn.disabled = false;
+    log("❌ 結算失敗：" + cleanErr(e));
   }
 }
 
@@ -500,7 +516,8 @@ $("listBtn").addEventListener("click", createAuction);
 $("loadItemsBtn").addEventListener("click", loadAuctions);
 $("clearLogBtn").addEventListener("click", clearLog);
 
-restoreLog(); // 一載入就把保存的交易紀錄補回畫面（重整/切網路都不會被吃掉）
+renderVerifyPanel(); // 一載入即顯示「合約一覽」面板，不依賴交易紀錄
+restoreLog(); // 重新整理／切換網路後，把保存的交易紀錄補回畫面
 if (!configured()) $("needConfig").classList.remove("hidden");
 </script>
 </body>
