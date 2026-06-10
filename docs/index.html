@@ -39,8 +39,12 @@
     .item .body { padding:10px; }
     .item .name { font-size:14px; font-weight:600; margin-bottom:4px; }
     .item .price { color:var(--ok); font-weight:700; }
-    #log { font-family:Consolas,monospace; font-size:12px; max-height:240px; overflow:auto; }
-    .logline { padding:6px 0; border-bottom:1px solid var(--line); }
+    #log { font-family:Consolas,monospace; font-size:12px; max-height:360px; min-height:80px; overflow-y:auto; resize:vertical; padding-right:8px; }
+    #log::-webkit-scrollbar { width:10px; }
+    #log::-webkit-scrollbar-thumb { background:var(--line); border-radius:6px; }
+    #log::-webkit-scrollbar-thumb:hover { background:var(--acc); }
+    .logline { padding:6px 2px; border-bottom:1px solid var(--line); word-break:break-word; }
+    .logline a { word-break:break-all; }
     .hidden { display:none; }
   </style>
 </head>
