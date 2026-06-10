@@ -102,7 +102,7 @@
 
     <!-- 交易紀錄（每筆都附 Etherscan 連結 = 外部可查詢）-->
     <div class="card" style="margin-top:18px;">
-      <h2>🔗 交易紀錄（點連結到 Etherscan 查證）</h2>
+      <h2>🔗 交易紀錄（點連結到 Etherscan 查證）　<button id="clearLogBtn" class="ghost" style="font-size:12px;padding:2px 10px;">清除</button></h2>
       <div id="log"><div class="logline muted">尚無交易。</div></div>
     </div>
   </div>
@@ -148,15 +148,39 @@ let tickStarted = false;
 
 // ====== 小工具 ======
 const $ = (id) => document.getElementById(id);
-function log(msg, txHash) {
+// ====== 交易紀錄：存進 sessionStorage，重新整理／切換網路都不會被吃掉，關閉分頁才清空 ======
+const LOG_KEY = "mall_txlog";
+function loadLogStore() {
+  try { return JSON.parse(sessionStorage.getItem(LOG_KEY) || "[]"); } catch (_) { return []; }
+}
+function renderLogLine(html) {
   const el = document.createElement("div");
   el.className = "logline";
-  el.innerHTML = txHash
-    ? `${msg} → <a href="${EXPLORER}/tx/${txHash}" target="_blank">在 Etherscan 查看交易 ↗</a>`
-    : msg;
+  el.innerHTML = html;
   const box = $("log");
   if (box.firstChild && box.firstChild.classList?.contains("muted")) box.innerHTML = "";
-  box.prepend(el);
+  box.prepend(el); // 最新的排在最上面
+}
+function log(msg, txHash) {
+  const time = new Date().toLocaleTimeString([], { hour12: false });
+  const body = txHash
+    ? `${msg} → <a href="${EXPLORER}/tx/${txHash}" target="_blank">在 Etherscan 查看交易 ↗</a>`
+    : msg;
+  const html = `<span class="muted">[${time}]</span> ${body}`;
+  const arr = loadLogStore();
+  arr.push(html);
+  try { sessionStorage.setItem(LOG_KEY, JSON.stringify(arr)); } catch (_) {}
+  renderLogLine(html);
+}
+function restoreLog() { // 重新整理/切換網路後，把保存的紀錄補回畫面
+  const arr = loadLogStore();
+  if (!arr.length) return;
+  $("log").innerHTML = "";
+  arr.forEach((h) => renderLogLine(h)); // 依時間序逐一 prepend，最新仍在最上
+}
+function clearLog() { // 手動清空（需要時才按）
+  sessionStorage.removeItem(LOG_KEY);
+  $("log").innerHTML = '<div class="logline muted">尚無交易。</div>';
 }
 function ipfsToHttp(uri) {
   if (!uri) return "";
@@ -214,6 +238,10 @@ async function connect() {
     `合約：<a href="${EXPLORER}/address/${CFG.contracts.MallToken}" target="_blank">MTK代幣</a> · ` +
     `<a href="${EXPLORER}/address/${CFG.contracts.MallItem}" target="_blank">NFT</a> · ` +
     `<a href="${EXPLORER}/address/${CFG.contracts.Auction}" target="_blank">拍賣合約</a>`;
+
+  // 連接成功就把錢包與合約檢視連結寫進交易紀錄（永久保留在本次紀錄中）
+  log(`👛 已連接錢包 ${short(account)}`);
+  log(`🔗 合約公開可檢視（Read Contract）：<a href="${EXPLORER}/address/${CFG.contracts.PriceConsumer}#readContract" target="_blank">PriceConsumer ↗</a>`);
 
   await refresh();
   await loadPrice();
@@ -445,7 +473,9 @@ $("claimBtn").addEventListener("click", claim);
 $("refreshBtn").addEventListener("click", refresh);
 $("listBtn").addEventListener("click", createAuction);
 $("loadItemsBtn").addEventListener("click", loadAuctions);
+$("clearLogBtn").addEventListener("click", clearLog);
 
+restoreLog(); // 一載入就把保存的交易紀錄補回畫面（重整/切網路都不會被吃掉）
 if (!configured()) $("needConfig").classList.remove("hidden");
 </script>
 </body>
